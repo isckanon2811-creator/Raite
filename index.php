@@ -1,0 +1,247 @@
+<?php
+session_start();
+$es_conductor = (isset($_SESSION['usuario_rol']) && $_SESSION['usuario_rol'] === 'conductor');
+$nombre_usuario = $es_conductor ? $_SESSION['usuario_nombre'] : "";
+?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Raite - App Solicita viaje</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
+        
+        .botones-top { position: absolute; top: 15px; left: 10px; right: 10px; z-index: 1000; display: flex; gap: 8px; flex-wrap: wrap; }
+        
+        .panel-inferior { position: absolute; bottom: 0; left: 0; right: 0; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; padding: 20px; z-index: 1000; box-shadow: 0 -5px 15px rgba(0,0,0,0.1); }
+
+        .leaflet-routing-container { display: none !important; }
+        .leaflet-control-attribution { display: none; }
+
+        .btn-check:checked + .btn-outline-primary { background-color: #0000FF !important; border-color: #0000FF !important; color: white !important; }
+
+        .modal-header-container {
+            position: relative;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 25px 0 10px 0;
+        }
+
+        .modal-title-centered {
+            margin: 0 !important;
+            font-weight: bold;
+            text-align: center;
+            width: 100%;
+        }
+
+        .btn-cerrar-rojo-absoluto {
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            width: 35px;
+            height: 35px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            cursor: pointer;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="botones-top">
+    <?php if ($es_conductor): ?>
+        <div class="bg-success text-white p-2 px-3 rounded-pill shadow fw-bold d-flex align-items-center" style="font-size: 11px;">
+            🚗 SESIÓN: <?php echo strtoupper($nombre_usuario); ?>
+        </div>
+        <a href="ventanas/cerrar_sesion.php" class="btn btn-danger btn-sm rounded-pill shadow-sm fw-bold" style="font-size: 10px;">SALIR</a>
+    <?php else: ?>
+        <a href="ventanas/soyconductor.php" class="btn btn-primary rounded-pill shadow fw-bold border-0" style="background-color: #0000FF; font-size: 11px; padding: 10px 18px;">
+            🚗 SOY CONDUCTOR
+        </a>
+    <?php endif; ?>
+    <button id="btnOrigen" class="btn btn-light rounded-pill shadow-sm fw-bold border-0" style="font-size: 11px; padding: 10px 15px;">📍 ORIGEN</button>
+    <button id="btnEditar" class="btn btn-warning rounded-pill shadow-sm fw-bold border-0 d-none" style="font-size: 11px; padding: 10px 15px;">✏️ EDITAR VIAJE</button>
+</div>
+
+<div class="panel-inferior text-center">
+    <div style="width: 40px; height: 5px; background: #ddd; border-radius: 10px; margin: 0 auto 15px;"></div>
+    <h5 id="textoEstado" class="fw-bold">¿A dónde vamos?</h5>
+    <button id="btnViaje" class="btn btn-primary w-100 py-3 rounded-3 fw-bold mt-2" style="background-color: #0000FF; border: none; display: none;">CONFIRMAR RAITE</button>
+</div>
+
+<!-- MODAL DETALLES -->
+<div class="modal fade" id="modalDetalles" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered mx-3">
+    <div class="modal-content" style="border-radius: 20px; border: none;">
+      <div class="modal-header-container">
+        <h5 class="modal-title-centered">Detalles del Raite</h5>
+        <button type="button" class="btn-cerrar-rojo-absoluto" data-bs-dismiss="modal">✕</button>
+      </div>
+
+      <div class="modal-body p-4 text-center">
+        <div class="btn-group w-100 mb-4" role="group">
+          <input type="radio" class="btn-check" name="tipoServicio" id="opcPasajeros" value="Pasajeros" checked>
+          <label class="btn btn-outline-primary py-2 fw-bold" for="opcPasajeros">👥 Pasajeros</label>
+
+          <input type="radio" class="btn-check" name="tipoServicio" id="opcPaqueteria" value="Paquetería">
+          <label class="btn btn-outline-primary py-2 fw-bold" for="opcPaqueteria">📦 Paquetería</label>
+        </div>
+
+        <div id="seccionPasajeros" class="mb-4 text-start">
+            <label class="small fw-bold text-muted mb-2">¿Cuántos pasajeros son?</label>
+            <select id="numPasajeros" class="form-select shadow-none" style="border-radius: 12px;">
+                <option value="1">1 Persona</option>
+                <option value="2">2 Personas</option>
+                <option value="3">3 Personas</option>
+            </select>
+        </div>
+
+        <div class="form-floating mb-4">
+          <input type="text" class="form-control shadow-none" id="inputNombre" placeholder="Tu nombre" style="border-radius: 12px;">
+          <label for="inputNombre">Nombre de quien solicita</label>
+        </div>
+
+        <button id="btnEnviarFinal" class="btn btn-primary w-100 py-3 fw-bold shadow-sm" style="background-color: #0000FF; border-radius: 12px; border: none;">PEDIR AHORA</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<?php include 'ventanas/modals.php'; ?>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+<script>
+    // Variables Globales
+    var map = L.map('map', { zoomControl: false }).setView([16.25, -92.13], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    var origenMarker = null;
+    var destinoMarker = null;
+    var routingControl = null;
+    var primeraVez = true;
+    var modoCambiarOrigen = false;
+    var rutaFijada = false;
+
+    // Inicializar Instancias de Modales
+    var modalDetallesBS = new bootstrap.Modal(document.getElementById('modalDetalles'));
+    var modalOrigenBS = new bootstrap.Modal(document.getElementById('modalOrigen'));
+    // El de estado se crea al momento porque está en el include externo
+    
+    const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+
+    function inicializarSeguimiento() {
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(function(position) {
+                var lat = position.coords.latitude;
+                var lon = position.coords.longitude;
+                if (primeraVez) {
+                    map.setView([lat, lon], 16);
+                    origenMarker = L.marker([lat, lon]).addTo(map).bindPopup("Tu ubicación").openPopup();
+                    primeraVez = false;
+                } else if (!modoCambiarOrigen && !rutaFijada && origenMarker) {
+                    origenMarker.setLatLng([lat, lon]);
+                }
+            }, function(error) { console.error(error); }, geoOptions);
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        setTimeout(inicializarSeguimiento, 1000);
+    });
+
+    map.on('click', function(e) {
+        if (rutaFijada) return;
+        if (modoCambiarOrigen) {
+            origenMarker.setLatLng([e.latlng.lat, e.latlng.lng]);
+            modoCambiarOrigen = false;
+            if (destinoMarker) calcularRuta();
+        } else {
+            if (destinoMarker) map.removeLayer(destinoMarker);
+            destinoMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
+            calcularRuta();
+        }
+    });
+
+    function calcularRuta() {
+        if (!origenMarker || !destinoMarker) return;
+        if (routingControl) map.removeControl(routingControl);
+        routingControl = L.Routing.control({
+            waypoints: [L.latLng(origenMarker.getLatLng()), L.latLng(destinoMarker.getLatLng())],
+            lineOptions: { styles: [{ color: '#0000FF', opacity: 0.7, weight: 6 }] },
+            createMarker: function() { return null; },
+            addWaypoints: false,
+            routeWhileDragging: false
+        }).addTo(map);
+
+        rutaFijada = true;
+        document.getElementById('btnEditar').classList.remove('d-none');
+        document.getElementById('btnViaje').style.display = 'block';
+        document.getElementById('textoEstado').innerText = "Ruta lista";
+    }
+
+    function resetearViaje() {
+        rutaFijada = false;
+        if (routingControl) map.removeControl(routingControl);
+        if (destinoMarker) { map.removeLayer(destinoMarker); destinoMarker = null; }
+        document.getElementById('btnEditar').classList.add('d-none');
+        document.getElementById('btnViaje').style.display = 'none';
+        document.getElementById('textoEstado').innerText = "¿A dónde vamos?";
+    }
+
+    // ACCIONES DE BOTONES
+    document.getElementById('btnEditar').onclick = resetearViaje;
+
+    document.getElementById('btnOrigen').onclick = function() {
+        if (rutaFijada) resetearViaje();
+        modoCambiarOrigen = true;
+        modalOrigenBS.show();
+    };
+
+    document.getElementById('btnViaje').onclick = function() {
+        modalDetallesBS.show();
+    };
+
+    document.getElementById('btnEnviarFinal').onclick = function() {
+        const nombre = document.getElementById('inputNombre').value;
+        if(nombre.trim() === "") {
+            alert("Escribe tu nombre para continuar");
+            return;
+        }
+
+        // 1. Cerramos Detalles
+        modalDetallesBS.hide();
+
+        // 2. Abrimos Solicitando (modalEstado está en modals.php)
+        var modalEstadoBS = new bootstrap.Modal(document.getElementById('modalEstado'));
+        modalEstadoBS.show();
+
+        console.log("Solicitud procesada para: " + nombre);
+    };
+
+    function togglePasajeros(mostrar) {
+        document.getElementById('seccionPasajeros').style.display = mostrar ? 'block' : 'none';
+    }
+</script>
+</body>
+</html>
