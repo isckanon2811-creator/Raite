@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guardar Datos Personales</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; max-width: 600px; }
+        form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; background: #f9f9f9; padding: 15px; border-radius: 5px; }
+        input { padding: 8px; font-size: 14px; }
+        button { padding: 10px; background: #007BFF; color: white; border: none; cursor: pointer; border-radius: 3px; }
+        button:hover { background: #0056b3; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+
+    <h2>Registro de Datos Personales</h2>
+
+    <form id="formulario">
+        <label for="nombre">Nombre:</label>
+        <input type="text" id="nombre" required>
+
+        <label for="edad">Edad:</label>
+        <input type="number" id="edad" required>
+
+        <label for="correo">Correo Electrónico:</label>
+        <input type="email" id="correo" required>
+
+        <button type="submit">Guardar Datos</button>
+    </form>
+
+    <h3>Datos Guardados</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Edad</th>
+                <th>Correo</th>
+            </tr>
+        </thead>
+        <tbody id="cuerpoTabla">
+            <!-- Los datos se cargan aquí -->
+        </tbody>
+    </table>
+
+    <script>
+        const formulario = document.getElementById('formulario');
+        const cuerpoTabla = document.getElementById('cuerpoTabla');
+
+        // Cargar datos al abrir la página
+        document.addEventListener('DOMContentLoaded', mostrarDatos);
+
+        formulario.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const nombre = document.getElementById('nombre').value;
+            const edad = document.getElementById('edad').value;
+            const correo = document.getElementById('correo').value;
+
+            const nuevoDato = { nombre, edad, correo };
+
+            // Obtener datos previos o iniciar un arreglo vacío
+            let datos = JSON.parse(localStorage.getItem('personas')) || [];
+            datos.push(nuevoDato);
+
+            // Guardar en localStorage
+            localStorage.setItem('personas', JSON.stringify(datos));
+
+            // Limpiar formulario y actualizar tabla
+            formulario.reset();
+            mostrarDatos();
+        });
+
+        function mostrarDatos() {
+            cuerpoTabla.innerHTML = '';
+            let datos = JSON.parse(localStorage.getItem('personas')) || [];
+
+            datos.forEach(persona => {
+                const fila = document.createElement('tr');
+                fila.innerHTML = `
+                    <td>${persona.nombre}</td>
+                    <td>${persona.edad}</td>
+                    <td>${persona.correo}</td>
+                `;
+                cuerpoTabla.appendChild(fila);
+            });
+        }
+    </script>
+
+</body>
+</html>
